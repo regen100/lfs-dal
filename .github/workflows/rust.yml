@@ -1,0 +1,94 @@
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+
+name: Rust
+
+jobs:
+  build:
+    name: ${{ matrix.job.target }}
+    runs-on: ${{ matrix.job.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        job:
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: "sccache"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.3
+      - name: Setup toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.job.target }}
+          components: clippy, rustfmt
+      - name: Setup packages on Ubuntu
+        if: runner.os == 'Linux'
+        run: |
+          sudo DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends musl-tools
+      - name: Rustfmt
+        run: cargo fmt -- --check
+      - name: Clippy
+        run: cargo clippy --locked --all-features --target=${{ matrix.job.target }} --no-deps -- -Dwarnings
+      - name: Test
+        run: cargo test --locked --all-features --target=${{ matrix.job.target }}
+        env:
+          RUST_BACKTRACE: ${{ runner.debug && '1' || '' }}
+      - name: Build
+        run: cargo build --locked --release --all-features --target=${{ matrix.job.target }}
+      - name: Create package
+        id: package
+        shell: bash
+        run: |
+          ${{ runner.debug && 'set -x' || '' }}
+          set -u
+          metadata="$(cargo metadata --format-version=1 --no-deps)"
+          name="$(echo "${metadata}" | jq --raw-output ".packages[0].name")"
+          version="$(echo "${metadata}" | jq --raw-output ".packages[0].version")"
+          fullname="${name}-v${version}-${{ matrix.job.target }}"
+          executable="target/${{ matrix.job.target }}/release/${name}${{ runner.os == 'Windows' && '.exe' || '' }}"
+          artifact_dir=".ci/${fullname}"
+          mkdir -p "${artifact_dir}"
+          cp "${executable}" "${artifact_dir}"
+          artifact="${artifact_dir}.${{ runner.os == 'Windows' && 'zip' || 'tar.gz' }}"
+          echo "artifact=${artifact}" >>"$GITHUB_OUTPUT"
+          pushd "${artifact_dir}" >/dev/null
+          ${{ runner.os == 'Windows' && '7z -y a' || 'tar czf' }} "../../${artifact}" * >/dev/null
+          popd >/dev/null
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.job.target }}
+          path: ${{ steps.package.outputs.artifact }}
+          if-no-files-found: error
+  release:
+    name: Release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            */*

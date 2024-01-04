@@ -1,0 +1,25 @@
+[package]
+name = "lfs-dal"
+version = "0.1.0"
+edition = "2021"
+description = "A custom transfer agent for Git LFS powered by OpenDAL."
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/regen100/lfs-dal"
+keywords = ["linter"]
+categories = ["command-line-utilities", "development-tools"]
+include = ["LICENSE", "src/"]
+
+[dependencies]
+anyhow = "1.0.78"
+clap = { version = "4.4.12", features = ["derive"] }
+gix-config = "0.33.1"
+log = "0.4.20"
+opendal = { version = "0.44.0", default-features = false, features = ["rustls", "services-azblob", "services-dropbox", "services-fs", "services-gcs", "services-gdrive", "services-memory", "services-onedrive", "services-s3", "services-webdav", "services-webhdfs"] }
+serde = "1.0.193"
+serde_json = "1.0.108"
+simplelog = "0.12.1"
+tokio = { version = "1.35.1", features = ["fs", "io-std", "macros", "rt-multi-thread"] }
+
+[dev-dependencies]
+tempfile = "3.9.0"
