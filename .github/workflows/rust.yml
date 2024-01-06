@@ -8,6 +8,9 @@ on:
 
 name: Rust
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: ${{ matrix.job.target }}
