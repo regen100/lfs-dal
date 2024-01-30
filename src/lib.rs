@@ -11,7 +11,7 @@ use tokio::{
     sync, task,
 };
 
-const DEFAULT_BUF_SIZE: usize = 8 * 1024;
+const DEFAULT_BUF_SIZE: usize = 8 * 1024 * 1024;
 
 pub struct Agent {
     remote_op: Operator,
@@ -51,8 +51,8 @@ impl Agent {
         let sender = self.sender.clone();
         self.tasks.spawn(async move {
             let status: Result<Option<String>> = async {
-                let mut reader = fs::File::open(path).await?;
-                let mut writer = remote_op.writer(&oid).await?;
+                let mut reader = io::BufReader::new(fs::File::open(path).await?);
+                let mut writer = remote_op.writer_with(&oid).buffer(DEFAULT_BUF_SIZE).await?;
                 copy_with_progress(&sender, &oid, &mut reader, &mut writer).await?;
                 writer.shutdown().await?;
                 Ok(None)
@@ -69,8 +69,8 @@ impl Agent {
         self.tasks.spawn(async move {
             let status: Result<Option<String>> = async {
                 fs::create_dir_all(path.parent().unwrap()).await?;
-                let mut reader = remote_op.reader(&oid).await?;
-                let mut writer = fs::File::create(&path).await?;
+                let mut reader = remote_op.reader_with(&oid).buffer(DEFAULT_BUF_SIZE).await?;
+                let mut writer = io::BufWriter::new(fs::File::create(&path).await?);
                 copy_with_progress(&sender, &oid, &mut reader, &mut writer).await?;
                 writer.shutdown().await?;
                 Ok(Some(path.to_string_lossy().into()))
@@ -101,7 +101,7 @@ where
     W: io::AsyncWriteExt + Unpin,
 {
     let mut bytes_so_far: usize = 0;
-    let mut buf = [0; DEFAULT_BUF_SIZE];
+    let mut buf = vec![0; DEFAULT_BUF_SIZE];
 
     loop {
         let bytes_since_last = reader.read(&mut buf).await?;
