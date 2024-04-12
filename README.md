@@ -30,6 +30,13 @@ $ git config lfs.customtransfer.lfs-dal.path /PATH/TO/LFS-DAL
 $ git config -f .lfsconfig lfs.url lfs-dal  # avoid to push to the default server accidentally
 ```
 
+For AWS SSO sessions, use [aws2-wrap](https://github.com/linaro-its/aws2-wrap).
+
+```bash
+$ git config lfs.customtransfer.lfs-dal.path /PATH/TO/aws2-wrap
+$ git config lfs.customtransfer.lfs-dal.args lfs-dal
+```
+
 ### `lfs-dal` configuration
 
 Configure OpenDAL service settings in `lfs-dal` section at `.lfsdalconfig` or `.git/config`.
