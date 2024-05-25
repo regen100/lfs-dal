@@ -17,6 +17,12 @@ Download the released binary or build from source.
 $ cargo install lfs-dal
 ```
 
+Or install from homebrew.
+```sh
+brew tap MohamedKari/lfs-dal
+brew install lfs-dal
+```
+
 ## Usage
 
 ### `git-lfs` configuration
