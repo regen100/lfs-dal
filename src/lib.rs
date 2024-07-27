@@ -1,31 +1,28 @@
 mod protocol;
 
 use anyhow::{Context as _, Result};
+use futures_util::{io::AsyncReadExt, AsyncWriteExt};
 use log::debug;
 use opendal::Operator;
 use protocol::*;
 use std::path::PathBuf;
-use tokio::{
-    fs,
-    io::{self, AsyncWriteExt as _},
-    sync, task,
-};
+use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt as _};
 
 const DEFAULT_BUF_SIZE: usize = 8 * 1024 * 1024;
 
 pub struct Agent {
     remote_op: Operator,
-    sender: sync::mpsc::Sender<String>,
-    tasks: task::JoinSet<()>,
+    sender: tokio::sync::mpsc::Sender<String>,
+    tasks: tokio::task::JoinSet<()>,
     root: PathBuf,
 }
 
 impl Agent {
-    pub fn new(remote_op: Operator, sender: sync::mpsc::Sender<String>) -> Self {
+    pub fn new(remote_op: Operator, sender: tokio::sync::mpsc::Sender<String>) -> Self {
         Self {
             remote_op,
             sender,
-            tasks: task::JoinSet::new(),
+            tasks: tokio::task::JoinSet::new(),
             root: PathBuf::from(""),
         }
     }
@@ -51,10 +48,15 @@ impl Agent {
         let sender = self.sender.clone();
         self.tasks.spawn(async move {
             let status: Result<Option<String>> = async {
-                let mut reader = io::BufReader::new(fs::File::open(path).await?);
-                let mut writer = remote_op.writer_with(&oid).buffer(DEFAULT_BUF_SIZE).await?;
+                let mut reader =
+                    tokio::io::BufReader::new(tokio::fs::File::open(path).await?).compat();
+                let mut writer = remote_op
+                    .writer_with(&oid)
+                    .chunk(DEFAULT_BUF_SIZE)
+                    .await?
+                    .into_futures_async_write();
                 copy_with_progress(&sender, &oid, &mut reader, &mut writer).await?;
-                writer.shutdown().await?;
+                writer.close().await?;
                 Ok(None)
             }
             .await;
@@ -68,11 +70,18 @@ impl Agent {
         let path = self.root.join(lfs_object_path(&oid));
         self.tasks.spawn(async move {
             let status: Result<Option<String>> = async {
-                fs::create_dir_all(path.parent().unwrap()).await?;
-                let mut reader = remote_op.reader_with(&oid).buffer(DEFAULT_BUF_SIZE).await?;
-                let mut writer = io::BufWriter::new(fs::File::create(&path).await?);
+                tokio::fs::create_dir_all(path.parent().unwrap()).await?;
+                let meta = remote_op.stat(&oid).await?;
+                let mut reader = remote_op
+                    .reader_with(&oid)
+                    .chunk(DEFAULT_BUF_SIZE)
+                    .await?
+                    .into_futures_async_read(0..meta.content_length())
+                    .await?;
+                let mut writer =
+                    tokio::io::BufWriter::new(tokio::fs::File::create(&path).await?).compat_write();
                 copy_with_progress(&sender, &oid, &mut reader, &mut writer).await?;
-                writer.shutdown().await?;
+                writer.close().await?;
                 Ok(Some(path.to_string_lossy().into()))
             }
             .await;
@@ -85,20 +94,20 @@ impl Agent {
     }
 }
 
-async fn send_response(sender: &sync::mpsc::Sender<String>, msg: String) {
+async fn send_response(sender: &tokio::sync::mpsc::Sender<String>, msg: String) {
     debug!("response: {}", &msg);
     sender.send(msg).await.unwrap();
 }
 
 async fn copy_with_progress<R, W>(
-    progress_sender: &sync::mpsc::Sender<String>,
+    progress_sender: &tokio::sync::mpsc::Sender<String>,
     oid: &str,
     mut reader: R,
     mut writer: W,
-) -> io::Result<usize>
+) -> tokio::io::Result<usize>
 where
-    R: io::AsyncReadExt + Unpin,
-    W: io::AsyncWriteExt + Unpin,
+    R: AsyncReadExt + Unpin,
+    W: AsyncWriteExt + Unpin,
 {
     let mut bytes_so_far: usize = 0;
     let mut buf = vec![0; DEFAULT_BUF_SIZE];
@@ -131,14 +140,14 @@ fn lfs_object_path(oid: &str) -> PathBuf {
 mod tests {
     use super::*;
     use std::io::Write as _;
-    use sync::mpsc::error::TryRecvError;
     use tempfile::NamedTempFile;
+    use tokio::sync::mpsc::error::TryRecvError;
 
-    fn agent_with_buf() -> (Agent, sync::mpsc::Receiver<String>) {
+    fn agent_with_buf() -> (Agent, tokio::sync::mpsc::Receiver<String>) {
         let remote_op = opendal::Operator::new(opendal::services::Memory::default())
             .unwrap()
             .finish();
-        let (tx, rx) = sync::mpsc::channel(32);
+        let (tx, rx) = tokio::sync::mpsc::channel(32);
         let agent = Agent::new(remote_op, tx);
         (agent, rx)
     }
@@ -177,7 +186,7 @@ mod tests {
         );
         assert_eq!(output.try_recv(), Err(TryRecvError::Empty));
         assert_eq!(
-            agent.remote_op.read("aabbcc").await.unwrap(),
+            agent.remote_op.read("aabbcc").await.unwrap().to_bytes(),
             "test".as_bytes()
         );
     }
