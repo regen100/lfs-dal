@@ -11,15 +11,17 @@ categories = ["command-line-utilities", "development-tools"]
 include = ["LICENSE", "src/"]
 
 [dependencies]
-anyhow = "1.0.78"
-clap = { version = "4.4.12", features = ["derive"] }
-gix-config = "0.33.1"
-log = "0.4.20"
-opendal = { version = "0.44.2", default-features = false, features = ["rustls", "services-azblob", "services-dropbox", "services-fs", "services-gcs", "services-gdrive", "services-memory", "services-onedrive", "services-s3", "services-webdav", "services-webhdfs"] }
-serde = "1.0.193"
-serde_json = "1.0.108"
-simplelog = "0.12.1"
-tokio = { version = "1.35.1", features = ["fs", "io-std", "macros", "rt-multi-thread"] }
+anyhow = "1.0.86"
+clap = { version = "4.5.11", features = ["derive"] }
+futures-util = "0.3.30"
+gix-config = "0.38.0"
+log = "0.4.22"
+opendal = { version = "0.47.3", features = ["services-azblob", "services-dropbox", "services-fs", "services-gcs", "services-gdrive", "services-memory", "services-onedrive", "services-s3", "services-webdav", "services-webhdfs"] }
+serde = "1.0.204"
+serde_json = "1.0.120"
+simplelog = "0.12.2"
+tokio = { version = "1.39.2", features = ["fs", "io-std", "macros", "rt-multi-thread"] }
+tokio-util = { version = "0.7.11", features = ["compat"] }
 
 [dev-dependencies]
-tempfile = "3.9.0"
+tempfile = "3.10.1"

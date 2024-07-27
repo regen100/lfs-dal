@@ -34,7 +34,7 @@ fn get_map(f: &gix_config::File) -> HashMap<String, String> {
     }
     let section = section.unwrap();
     section
-        .keys()
+        .value_names()
         .map(|k| {
             (
                 k.to_string().replace('-', "_"),
