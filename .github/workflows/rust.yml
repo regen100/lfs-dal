@@ -25,7 +25,7 @@ jobs:
             os: windows-latest
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-          - target: x86_64-unknown-linux-musl
+          - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
     env:
       SCCACHE_GHA_ENABLED: "true"
@@ -34,7 +34,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.4
+        uses: mozilla-actions/sccache-action@v0.0.5
       - name: Setup toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -42,9 +42,14 @@ jobs:
           targets: ${{ matrix.job.target }}
           components: clippy, rustfmt
       - name: Setup packages on Ubuntu
-        if: runner.os == 'Linux'
+        if: matrix.job.target == 'aarch64-unknown-linux-gnu'
         run: |
-          sudo DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends musl-tools
+          sudo DEBIAN_FRONTEND=noninteractive apt-get -qq install -y --no-install-recommends g++-aarch64-linux-gnu libc6-arm64-cross
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >>"$GITHUB_ENV"
+          echo "QEMU_LD_PREFIX=/usr/aarch64-linux-gnu/" >>"$GITHUB_ENV"
+      - name: Set up QEMU
+        if: matrix.job.target == 'aarch64-unknown-linux-gnu'
+        uses: docker/setup-qemu-action@v3
       - name: Rustfmt
         run: cargo fmt -- --check
       - name: Clippy
