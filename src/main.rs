@@ -39,10 +39,9 @@ async fn run() -> Result<()> {
         )?;
     }
     if cli.list {
-        let mut schemes: Vec<_> = opendal::Scheme::enabled()
-            .into_iter()
-            .map(|s| s.to_string())
-            .collect();
+        let mut schemes: Vec<&str> = vec![
+            "azblob", "dropbox", "fs", "gcs", "gdrive", "memory", "onedrive", "s3", "webdav", "webhdfs"
+        ];
         schemes.sort();
         println!("{}", schemes.join("\n"));
         return Ok(());

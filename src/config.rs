@@ -1,6 +1,6 @@
 use anyhow::{Context as _, Result};
 use log::debug;
-use opendal::{Operator, Scheme};
+use opendal::Operator;
 use std::collections::HashMap;
 
 const SCHEME_KEY: &str = "scheme";
@@ -18,13 +18,10 @@ pub fn remote_operator() -> Result<Operator> {
 
     let scheme_str = map
         .get(SCHEME_KEY)
-        .with_context(|| format!("{} not found", SCHEME_KEY))?;
-    let scheme = Scheme::enabled()
-        .into_iter()
-        .find(|s| &s.to_string() == scheme_str)
-        .with_context(|| format!("invalid scheme {}", scheme_str))?;
+        .with_context(|| format!("{} not found", SCHEME_KEY))?
+        .to_string();
 
-    Ok(Operator::via_map(scheme, map)?)
+    Ok(Operator::via_iter(scheme_str, map)?)
 }
 
 fn get_map(f: &gix_config::File) -> HashMap<String, String> {
